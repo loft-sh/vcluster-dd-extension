@@ -43,36 +43,37 @@ LABEL org.opencontainers.image.title="vcluster" \
     com.docker.extension.publisher-url="https://www.vcluster.com" \
     com.docker.extension.additional-urls="[{\"title\":\"vcluster\",\"url\":\"https:\/\/vcluster.com\"},{\"title\":\"vcluster Documentation\",\"url\":\"https:\/\/vcluster.com/docs\"},{\"title\":\"Loft Inc.\",\"url\":\"https:\/\/loft.sh\"}]" \
     com.docker.extension.changelog="<li>Create/Delete/Upgrade vcluster</li><li>Pause/Resume vcluster</li><li>Connect/Disconnect vcluster</li>"
-
+ARG TARGETARCH=amd64
+RUN echo $TARGETARCH
 RUN apk add curl
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl \
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/$TARGETARCH/kubectl \
     && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
+    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-'$TARGETARCH')".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
     && chmod +x vcluster && mv vcluster /usr/local/bin \
-    && curl -LO https://get.helm.sh/helm-v3.9.0-linux-amd64.tar.gz \
-    && tar -xzf helm-v3.9.0-linux-amd64.tar.gz && mv linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && rm helm-v3.9.0-linux-amd64.tar.gz \
+    && curl -LO https://get.helm.sh/helm-v3.9.0-linux-$TARGETARCH.tar.gz \
+    && tar -xzf helm-v3.9.0-linux-$TARGETARCH.tar.gz && mv linux-$TARGETARCH/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && rm helm-v3.9.0-linux-$TARGETARCH.tar.gz \
     && mkdir /linux \
     && cp /usr/local/bin/kubectl /linux/ \
     && cp /usr/local/bin/vcluster /linux/ \
     && cp /usr/local/bin/helm /linux/
 
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl" \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-darwin-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
-    && curl -LO https://get.helm.sh/helm-v3.9.0-darwin-amd64.tar.gz \
-    && tar -xzf helm-v3.9.0-darwin-amd64.tar.gz && rm helm-v3.9.0-darwin-amd64.tar.gz \
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/$TARGETARCH/kubectl" \
+    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-darwin-'$TARGETARCH')".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
+    && curl -LO https://get.helm.sh/helm-v3.9.0-darwin-$TARGETARCH.tar.gz \
+    && tar -xzf helm-v3.9.0-darwin-$TARGETARCH.tar.gz && rm helm-v3.9.0-darwin-$TARGETARCH.tar.gz \
     && mkdir /darwin \
     && chmod +x ./kubectl && mv ./kubectl /darwin/ \
     && chmod +x ./vcluster && mv ./vcluster /darwin/ \
-    && chmod +x darwin-amd64/helm && mv darwin-amd64/helm /darwin/
+    && chmod +x darwin-$TARGETARCH/helm && mv darwin-$TARGETARCH/helm /darwin/
 
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/windows/amd64/kubectl.exe" \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-windows-amd64.exe)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster.exe \
-    && curl -LO https://get.helm.sh/helm-v3.9.0-windows-amd64.zip \
-    && unzip helm-v3.9.0-windows-amd64.zip \
-    && mkdir /windows \
-    && chmod +x ./kubectl.exe && mv ./kubectl.exe /windows/ \
-    && chmod +x ./vcluster.exe && mv ./vcluster.exe /windows/ \
-    && chmod +x windows-amd64/helm.exe && mv windows-amd64/helm.exe /windows/
+RUN if [ "amd64" = "$TARGETARCH" ]; then curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/windows/amd64/kubectl.exe" \
+           && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-windows-amd64.exe)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster.exe \
+           && curl -LO https://get.helm.sh/helm-v3.9.0-windows-amd64.zip \
+           && unzip helm-v3.9.0-windows-amd64.zip \
+           && mkdir /windows \
+           && chmod +x ./kubectl.exe && mv ./kubectl.exe /windows/ \
+           && chmod +x ./vcluster.exe && mv ./vcluster.exe /windows/ \
+           && chmod +x windows-amd64/helm.exe && mv windows-amd64/helm.exe /windows/ ; fi
 
 RUN mkdir -p /root/.kube
 RUN touch /root/.kube/config
