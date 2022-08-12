@@ -8,7 +8,6 @@ import {
     deleteVCluster,
     disconnectVCluster,
     getCurrentK8sContext,
-    isNodePortServiceAvailableForVcluster,
     listNamespaces,
     listVClusters,
     pauseVCluster,
@@ -186,22 +185,22 @@ export const VCluster = () => {
     };
 
     const connectUIVC = async (name: string, namespace: string) => {
-        const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
-        if (!nodePortService) {
-            ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
-        } else {
-            try {
-                const isConnected = await connectVCluster(ddClient, name, namespace);
-                if (isConnected) {
-                    ddClient.desktopUI.toast.success("vcluster connected successfully");
-                } else {
-                    ddClient.desktopUI.toast.error("vcluster connect failed");
-                }
-                await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
-            } catch (err) {
-                ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
+        // const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
+        // if (!nodePortService) {
+        //     ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
+        // } else {
+        try {
+            const isConnected = await connectVCluster(ddClient, name, namespace);
+            if (isConnected) {
+                ddClient.desktopUI.toast.success("vcluster connected successfully");
+            } else {
+                ddClient.desktopUI.toast.error("vcluster connect failed");
             }
+            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+        } catch (err) {
+            ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
         }
+        // }
     }
 
     let component

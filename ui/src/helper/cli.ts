@@ -153,7 +153,7 @@ export const listNodePortServices = async (ddClient: v1.DockerDesktopClient) => 
     output?.stdout.split("\n").forEach((svc: string) => {
         const trimmed = svc.trim();
         if (trimmed) {
-            const splitted = trimmed.split(" ").filter(entry => entry != "")
+            const splitted = trimmed.split(" ").filter(entry => entry !== "")
             if (splitted.length === 3) {
                 let svcObject: SvcObject = {
                     name: splitted[0].trim(),
@@ -195,14 +195,24 @@ export const disconnectVCluster = async (ddClient: v1.DockerDesktopClient, names
 
 // Runs `vcluster connect` command on host and changes the context is changed internally.
 export const connectVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string) => {
-    // vcluster connect name -n namespace
-    const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--context", DockerDesktop]);
-    if (connect?.stderr) {
-        console.log("[connectVCluster] : ", connect.stderr);
-        return false;
+    const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
+    if (!nodePortService) {
+        // vcluster connect name -n namespace --background-proxy
+        const connect = await cli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--background-proxy", "--context", DockerDesktop]);
+        if (connect?.stderr) {
+            console.log("[connectVCluster] : ", connect.stderr);
+            return false;
+        }
+        return true;
+    } else {
+        // vcluster connect name -n namespace
+        const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--context", DockerDesktop]);
+        if (connect?.stderr) {
+            console.log("[connectVCluster] : ", connect.stderr);
+            return false;
+        }
+        return true;
     }
-
-    return true;
 }
 
 // Gets docker-desktop kubeconfig file from local and save it in container's /root/.kube/config file-system.
