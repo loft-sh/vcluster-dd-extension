@@ -71,7 +71,7 @@ func storeKubeConfig(ctx echo.Context) error {
 	return ctx.JSON(http.StatusCreated, kubeConfigFilePath)
 }
 
-// storeKubeConfig stores the kubeconfig from the request in the container filesystem
+// storeValues stores the values required for `vcluster create`
 func storeValues(ctx echo.Context) error {
 	payload := &Payload{}
 	if err := ctx.Bind(payload); err != nil {

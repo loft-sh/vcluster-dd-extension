@@ -3,41 +3,47 @@ import {createDockerDesktopClient} from '@docker/extension-api-client';
 import "../App.css";
 import ErrorIcon from '@mui/icons-material/Error';
 import {
+    changeExtensionContext,
     connectVCluster,
     createVCluster,
     deleteVCluster,
     disconnectVCluster,
-    getCurrentK8sContext,
+    getCurrentExtensionContext,
+    getCurrentHostContext,
+    listExtensionContexts,
+    listHostContexts,
     listNamespaces,
     listVClusters,
     pauseVCluster,
-    resumeVCluster,
-    updateDockerDesktopK8sKubeConfig
+    resumeVCluster
 } from "../helper/cli";
 import {VClusterList} from "./List";
 import {VClusterCreate} from "./Create";
 import {Alert, Box, CircularProgress, Stack} from "@mui/material";
 import Typography from '@mui/material/Typography';
 import {blueGrey} from "@mui/material/colors";
+import {VClusterChangeContext} from "./VClusterChangeContext";
 
 const ddClient = createDockerDesktopClient();
 
-const refreshData = async (setCurrentK8sContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
+const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setCurrentExtensionContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>, setContexts: React.Dispatch<React.SetStateAction<any>>) => {
     try {
-        const result = await Promise.all([getCurrentK8sContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
-        setCurrentK8sContext(result[0]);
-        setVClusters(result[1]);
-        setNamespaces(result[2]);
+        const result = await Promise.all([getCurrentHostContext(ddClient), getCurrentExtensionContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient), listExtensionContexts(ddClient)]);
+        setCurrentHostContext(result[0]);
+        setCurrentExtensionContext(result[1]);
+        setVClusters(result[2]);
+        setNamespaces(result[3]);
+        setContexts(result[4]);
     } catch (err) {
         console.log("error", JSON.stringify(err));
-        setCurrentK8sContext("");
+        setCurrentHostContext("");
     }
 }
 
 const refreshContext = async (isDDK8sEnabled: boolean, setIsDDK8sEnabled: React.Dispatch<React.SetStateAction<any>>) => {
     if (!isDDK8sEnabled) {
         try {
-            let isDDK8sEnabled = await updateDockerDesktopK8sKubeConfig(ddClient);
+            let isDDK8sEnabled = await listHostContexts(ddClient);
             console.log("isDDK8sEnabled[interval] : ", isDDK8sEnabled)
             setIsDDK8sEnabled(isDDK8sEnabled)
         } catch (err) {
@@ -52,7 +58,7 @@ const refreshContext = async (isDDK8sEnabled: boolean, setIsDDK8sEnabled: React.
 const checkIfDDK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
     try {
         setIsLoading(true);
-        let isDDK8sEnabled = await updateDockerDesktopK8sKubeConfig(ddClient);
+        let isDDK8sEnabled = await listHostContexts(ddClient);
         setIsLoading(false);
         return isDDK8sEnabled
     } catch (err) {
@@ -65,7 +71,9 @@ const checkIfDDK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAc
 export const VCluster = () => {
     const [vClusters, setVClusters] = React.useState(undefined);
     const [namespaces, setNamespaces] = React.useState([]);
-    const [currentK8sContext, setCurrentK8sContext] = React.useState("");
+    const [contexts, setContexts] = React.useState([]);
+    const [currentHostContext, setCurrentHostContext] = React.useState("");
+    const [currentExtensionContext, setCurrentExtensionContext] = React.useState("");
     const [isDDK8sEnabled, setIsDDK8sEnabled] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
 
@@ -75,13 +83,13 @@ export const VCluster = () => {
             console.log("isDDK8sEnabled : ", isDDK8sEnabled)
             await setIsDDK8sEnabled(isDDK8sEnabled)
             if (isDDK8sEnabled) {
-                await refreshData(setCurrentK8sContext, setVClusters, setNamespaces)
+                await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
             }
         })();
         const contextInterval = setInterval(() => refreshContext(isDDK8sEnabled, setIsDDK8sEnabled), 5000);
         const dataInterval = setInterval(() => {
             if (isDDK8sEnabled) {
-                return refreshData(setCurrentK8sContext, setVClusters, setNamespaces)
+                return refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
             }
         }, 5000);
         return () => {
@@ -95,30 +103,44 @@ export const VCluster = () => {
             if (!namespace) {
                 namespace = "vcluster-" + name.toLowerCase();
             }
-            const isCreated = await createVCluster(ddClient, name, namespace, distro, chartVersion, values);
+            const isCreated = await createVCluster(ddClient, name, namespace, distro, chartVersion, values, currentExtensionContext);
             if (isCreated) {
                 ddClient.desktopUI.toast.success("vcluster created successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster create failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster create failed: " + JSON.stringify(err));
+        }
+    };
+
+    const changeUIContext = async (context: string) => {
+        try {
+            const isChanged = await changeExtensionContext(ddClient, context);
+            if (isChanged) {
+                ddClient.desktopUI.toast.success("extension context changed successfully");
+            } else {
+                ddClient.desktopUI.toast.error("extension context change failed");
+            }
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+        } catch (err) {
+            ddClient.desktopUI.toast.error("extension context change failed: " + JSON.stringify(err));
         }
     };
 
     const upgradeUIVC = async (name: string, namespace: string, chartVersion: string, values: string) => {
         try {
             // Using the same createVCluster function for the upgrade operation. Distro upgrade is not supported
-            const isUpgraded = await createVCluster(ddClient, name, namespace, "", chartVersion, values, true);
+            const isUpgraded = await createVCluster(ddClient, name, namespace, "", chartVersion, values, currentExtensionContext, true);
             if (isUpgraded) {
                 ddClient.desktopUI.toast.success("vcluster upgraded successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster upgrade failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster upgrade failed: " + JSON.stringify(err));
         }
@@ -126,14 +148,14 @@ export const VCluster = () => {
 
     const deleteUIVC = async (name: string, namespace: string) => {
         try {
-            const isDeleted = await deleteVCluster(ddClient, name, namespace);
+            const isDeleted = await deleteVCluster(ddClient, name, namespace, currentHostContext);
             if (isDeleted) {
                 ddClient.desktopUI.toast.success("vcluster deleted successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster[" + namespace + ":" + name + "] delete failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster delete failed: " + JSON.stringify(err));
         }
@@ -141,14 +163,14 @@ export const VCluster = () => {
 
     const pauseUIVC = async (name: string, namespace: string) => {
         try {
-            const isPaused = await pauseVCluster(ddClient, name, namespace);
+            const isPaused = await pauseVCluster(ddClient, name, namespace, currentExtensionContext);
             if (isPaused) {
                 ddClient.desktopUI.toast.success("vcluster paused successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster pause failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster pause failed: " + JSON.stringify(err));
         }
@@ -156,14 +178,14 @@ export const VCluster = () => {
 
     const resumeUIVC = async (name: string, namespace: string) => {
         try {
-            const isResumed = await resumeVCluster(ddClient, name, namespace);
+            const isResumed = await resumeVCluster(ddClient, name, namespace, currentExtensionContext);
             if (isResumed) {
                 ddClient.desktopUI.toast.success("vcluster resumed successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster resume failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster resume failed : " + JSON.stringify(err));
         }
@@ -178,7 +200,7 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster disconnect failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster disconnect failed: " + JSON.stringify(err));
         }
@@ -190,17 +212,16 @@ export const VCluster = () => {
         //     ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
         // } else {
         try {
-            const isConnected = await connectVCluster(ddClient, name, namespace);
+            const isConnected = await connectVCluster(ddClient, name, namespace, currentExtensionContext);
             if (isConnected) {
                 ddClient.desktopUI.toast.success("vcluster connected successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster connect failed");
             }
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
         }
-        // }
     }
 
     let component
@@ -222,6 +243,9 @@ export const VCluster = () => {
                 <VClusterCreate
                     createUIVC={createUIVC}
                     namespaces={namespaces}/>
+                <VClusterChangeContext
+                    changeUIContext={changeUIContext}
+                    contexts={contexts}/>
                 <VClusterList
                     upgradeUIVC={upgradeUIVC}
                     deleteUIVC={deleteUIVC}
@@ -230,7 +254,7 @@ export const VCluster = () => {
                     disconnectUIVC={disconnectUIVC}
                     connectUIVC={connectUIVC}
                     vClusters={vClusters}
-                    currentK8sContext={currentK8sContext}
+                    currentHostContext={currentHostContext}
                 />
             </React.Fragment>
         } else {
