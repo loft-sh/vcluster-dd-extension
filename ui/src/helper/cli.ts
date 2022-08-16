@@ -229,19 +229,22 @@ export const listHostContexts = async (ddClient: v1.DockerDesktopClient) => {
     try {
         await ddClient.extension.vm?.service?.post("/store-kube-config", {data: kubeConfig?.stdout})
     } catch (err) {
-        console.log("error", JSON.stringify(err));
+        console.log("error while posting kubeconfig to server", JSON.stringify(err));
     }
-
-    let output = await checkK8sConnection(ddClient);
-    if (output?.stderr) {
-        console.log("[checkK8sConnection] : ", output.stderr);
-        return false;
+    try {
+        let output = await checkK8sConnection(ddClient);
+        if (output?.stderr) {
+            console.log("[checkK8sConnection] : ", output.stderr);
+            return false;
+        }
+        if (output?.stdout) {
+            console.log("[checkK8sConnection] : ", output?.stdout)
+        }
+        return true
+    } catch (e) {
+        console.log("[checkK8sConnection] error : ", e)
+        return false
     }
-    if (output?.stdout) {
-        console.log("[checkK8sConnection] : ", output?.stdout)
-    }
-
-    return true;
 }
 
 // Lists all contexts from extension
@@ -277,9 +280,9 @@ export const listExtensionContexts = async (ddClient: v1.DockerDesktopClient) =>
 // Change context on extension container
 export const changeExtensionContext = async (ddClient: v1.DockerDesktopClient, context: string) => {
     // change context using kubectl
-    let output = await cli(ddClient, "vcluster", [""]);
-    console.log(context)
-
+    let output = await cli(ddClient, "kubectl", ["config", "use-context", context]);
+    console.log("context : ", context)
+    console.log("output : ", output)
     if (output?.stderr) {
         console.log("[changeContext] : ", output.stderr);
         return false;

@@ -40,29 +40,41 @@ const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateA
     }
 }
 
-const refreshContext = async (isDDK8sEnabled: boolean, setIsDDK8sEnabled: React.Dispatch<React.SetStateAction<any>>) => {
-    if (!isDDK8sEnabled) {
-        try {
-            let isDDK8sEnabled = await listHostContexts(ddClient);
-            console.log("isDDK8sEnabled[interval] : ", isDDK8sEnabled)
-            setIsDDK8sEnabled(isDDK8sEnabled)
-        } catch (err) {
-            console.log("isDDK8sEnabled[interval] error : ", JSON.stringify(err));
-            setIsDDK8sEnabled(false);
+const refreshContext = async (setIsK8sEnabled: React.Dispatch<React.SetStateAction<any>>, currentExtensionContext: string, setCurrentExtensionContext: React.Dispatch<React.SetStateAction<any>>) => {
+    // fetch fresh contexts from host and check if the k8s is running
+    let isK8sEnabled = await listHostContexts(ddClient);
+    console.log("isK8sEnabled[interval] : ", isK8sEnabled)
+    setIsK8sEnabled(isK8sEnabled)
+    if (isK8sEnabled) {
+        // if user has changed context on local and is different than the chosen by user of extension. Reset it to back earlier context
+        let currentHostContext = await getCurrentHostContext(ddClient)
+        console.log("currentHostContext : ", currentHostContext)
+        console.log("currentExtensionContext : ", currentExtensionContext)
+        if (currentExtensionContext !== currentHostContext) {
+            setCurrentExtensionContext(currentExtensionContext)
         }
     } else {
-        console.log("isDDK8sEnabled[interval] : ", isDDK8sEnabled)
+        let currentHostContext = await getCurrentHostContext(ddClient)
+        console.log("currentHostContext : ", currentHostContext)
+        console.log("currentExtensionContext : ", currentExtensionContext)
+        if (currentExtensionContext !== currentHostContext) {
+            if (currentExtensionContext !== "") {
+                setCurrentExtensionContext(currentExtensionContext)
+            } else {
+                setCurrentExtensionContext(currentHostContext)
+            }
+        }
     }
 }
 
-const checkIfDDK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
+const checkIfK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
     try {
         setIsLoading(true);
-        let isDDK8sEnabled = await listHostContexts(ddClient);
+        let isK8sEnabled = await listHostContexts(ddClient);
         setIsLoading(false);
-        return isDDK8sEnabled
+        return isK8sEnabled
     } catch (err) {
-        console.log("checkIfDDK8sEnabled error : ", JSON.stringify(err));
+        console.log("checkIfK8sEnabled error : ", JSON.stringify(err));
         setIsLoading(false);
     }
     return false;
@@ -74,21 +86,21 @@ export const VCluster = () => {
     const [contexts, setContexts] = React.useState([]);
     const [currentHostContext, setCurrentHostContext] = React.useState("");
     const [currentExtensionContext, setCurrentExtensionContext] = React.useState("");
-    const [isDDK8sEnabled, setIsDDK8sEnabled] = React.useState(false);
+    const [isK8sEnabled, setIsK8sEnabled] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
 
     useEffect(() => {
         (async () => {
-            let isDDK8sEnabled = await checkIfDDK8sEnabled(setIsLoading);
-            console.log("isDDK8sEnabled : ", isDDK8sEnabled)
-            await setIsDDK8sEnabled(isDDK8sEnabled)
-            if (isDDK8sEnabled) {
+            let isK8sEnabled = await checkIfK8sEnabled(setIsLoading);
+            console.log("isK8sEnabled while starting up : ", isK8sEnabled)
+            await setIsK8sEnabled(isK8sEnabled)
+            if (isK8sEnabled) {
                 await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
             }
         })();
-        const contextInterval = setInterval(() => refreshContext(isDDK8sEnabled, setIsDDK8sEnabled), 5000);
+        const contextInterval = setInterval(() => refreshContext(setIsK8sEnabled, currentExtensionContext, setCurrentExtensionContext), 5000);
         const dataInterval = setInterval(() => {
-            if (isDDK8sEnabled) {
+            if (isK8sEnabled) {
                 return refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
             }
         }, 5000);
@@ -96,7 +108,7 @@ export const VCluster = () => {
             clearInterval(dataInterval);
             clearInterval(contextInterval);
         }
-    }, [isDDK8sEnabled]);
+    }, [isK8sEnabled, currentExtensionContext]);
 
     const createUIVC = async (name: string, namespace: string, distro: string, chartVersion: string, values: string) => {
         try {
@@ -238,7 +250,7 @@ export const VCluster = () => {
             />
         </Box>
     } else {
-        if (isDDK8sEnabled) {
+        if (isK8sEnabled) {
             component = <React.Fragment>
                 <VClusterCreate
                     createUIVC={createUIVC}
@@ -259,12 +271,15 @@ export const VCluster = () => {
             </React.Fragment>
         } else {
             component = <Box>
+                <VClusterChangeContext
+                    changeUIContext={changeUIContext}
+                    contexts={contexts}/>
                 <Alert iconMapping={{
                     error: <ErrorIcon fontSize="inherit"/>,
                 }} severity="error" color="error">
-                    Seems like Kubernetes is not enabled in your Docker Desktop. Please take a look at the <a
+                    Seems like Kubernetes is not reachable from your Docker Desktop. Please take a look at the <a
                     href="https://docs.docker.com/desktop/kubernetes/">docker
-                    documentation</a> on how to enable the Kubernetes server.
+                    documentation</a> on how to enable the Kubernetes server in docker-desktop and then select docker-desktop context.
                 </Alert>
             </Box>
         }
