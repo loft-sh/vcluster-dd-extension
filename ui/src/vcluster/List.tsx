@@ -229,7 +229,7 @@ storage:
         }
     };
 
-    return (<div style={{display: 'flex', height: 400, width: '100%'}}>
+    return (<React.Fragment>
         <Stack direction="row" spacing={2}>
             <Dialog
                 open={state.deleteOpen}
@@ -352,5 +352,5 @@ storage:
             checkboxSelection={false}
             disableSelectionOnClick={true}
         />
-    </div>);
+    </React.Fragment>);
 }

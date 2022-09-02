@@ -19,7 +19,7 @@ import {
 } from "../helper/cli";
 import {VClusterList} from "./List";
 import {VClusterCreate} from "./Create";
-import {Alert, Box, CircularProgress, Stack} from "@mui/material";
+import {Alert, Box, CircularProgress, Divider, Grid, Stack} from "@mui/material";
 import Typography from '@mui/material/Typography';
 import {blueGrey} from "@mui/material/colors";
 import {VClusterChangeContext} from "./VClusterChangeContext";
@@ -160,7 +160,7 @@ export const VCluster = () => {
 
     const deleteUIVC = async (name: string, namespace: string) => {
         try {
-            const isDeleted = await deleteVCluster(ddClient, name, namespace, currentHostContext);
+            const isDeleted = await deleteVCluster(ddClient, name, namespace, currentExtensionContext);
             if (isDeleted) {
                 ddClient.desktopUI.toast.success("vcluster deleted successfully");
             } else {
@@ -252,22 +252,38 @@ export const VCluster = () => {
     } else {
         if (isK8sEnabled) {
             component = <React.Fragment>
-                <VClusterCreate
-                    createUIVC={createUIVC}
-                    namespaces={namespaces}/>
-                <VClusterChangeContext
-                    changeUIContext={changeUIContext}
-                    contexts={contexts}/>
-                <VClusterList
-                    upgradeUIVC={upgradeUIVC}
-                    deleteUIVC={deleteUIVC}
-                    pauseUIVC={pauseUIVC}
-                    resumeUIVC={resumeUIVC}
-                    disconnectUIVC={disconnectUIVC}
-                    connectUIVC={connectUIVC}
-                    vClusters={vClusters}
-                    currentHostContext={currentHostContext}
-                />
+                <Grid container spacing={2}>
+                    <Grid item xs={6} md={6}>
+                        <Stack direction="row" alignItems="left" justifyContent="left"
+                               divider={<Divider orientation="vertical" flexItem/>}
+                               spacing={2}>
+                            <VClusterCreate
+                                createUIVC={createUIVC}
+                                namespaces={namespaces}/>
+                        </Stack>
+                    </Grid>
+                    <Grid item xs={6} md={6}>
+                        <Stack direction="row" alignItems="right" justifyContent="right"
+                               divider={<Divider orientation="vertical" flexItem/>}
+                               spacing={2}>
+                            <VClusterChangeContext
+                                changeUIContext={changeUIContext}
+                                contexts={contexts}/>
+                        </Stack>
+                    </Grid>
+                    <Grid item xs={12}>
+                        <VClusterList
+                            upgradeUIVC={upgradeUIVC}
+                            deleteUIVC={deleteUIVC}
+                            pauseUIVC={pauseUIVC}
+                            resumeUIVC={resumeUIVC}
+                            disconnectUIVC={disconnectUIVC}
+                            connectUIVC={connectUIVC}
+                            vClusters={vClusters}
+                            currentHostContext={currentHostContext}
+                        />
+                    </Grid>
+                </Grid>
             </React.Fragment>
         } else {
             component = <Box>
@@ -279,7 +295,8 @@ export const VCluster = () => {
                 }} severity="error" color="error">
                     Seems like Kubernetes is not reachable from your Docker Desktop. Please take a look at the <a
                     href="https://docs.docker.com/desktop/kubernetes/">docker
-                    documentation</a> on how to enable the Kubernetes server in docker-desktop and then select docker-desktop context.
+                    documentation</a> on how to enable the Kubernetes server in docker-desktop and then select
+                    docker-desktop context.
                 </Alert>
             </Box>
         }

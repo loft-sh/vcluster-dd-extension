@@ -47,7 +47,8 @@ LABEL org.opencontainers.image.title="vcluster" \
 RUN apk add curl
 RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl \
     && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
+#    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
+    && curl -s -Lo vcluster https://github.com/loft-sh/vcluster/releases/download/v0.11.2-alpha.0/vcluster-linux-amd64 \
     && chmod +x vcluster && mv vcluster /usr/local/bin \
     && curl -LO https://get.helm.sh/helm-v3.9.0-linux-amd64.tar.gz \
     && tar -xzf helm-v3.9.0-linux-amd64.tar.gz && mv linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && rm helm-v3.9.0-linux-amd64.tar.gz \
@@ -70,6 +71,7 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 RUN mkdir -p /root/.kube
 RUN touch /root/.kube/config
 ENV KUBECONFIG=/root/.kube/config
+COPY docker-compose.yaml .
 COPY metadata.json .
 COPY vcluster.svg .
 COPY --from=builder /backend/bin/service /

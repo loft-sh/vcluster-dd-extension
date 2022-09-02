@@ -1,7 +1,7 @@
 import React, {ChangeEvent} from "react";
-import CreateIcon from '@mui/icons-material/Create';
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField} from "@mui/material";
 import {AsyncButton} from "./AsyncButton/AsyncButton";
+import {ChangeCircle} from "@mui/icons-material";
 
 type Props = {
     contexts: string[],
@@ -31,7 +31,7 @@ export const VClusterChangeContext = (props: Props) => {
         handleClose();
     };
 
-    return <Stack direction="row" spacing={2}>
+    return <>
         <Dialog
             open={open}
             onClose={handleClose}
@@ -76,8 +76,8 @@ export const VClusterChangeContext = (props: Props) => {
                 </DialogActions>
             </form>
         </Dialog>
-        <Button variant="contained" onClick={handleClickOpen} startIcon={<CreateIcon/>}>
+        <Button variant="contained" onClick={handleClickOpen} startIcon={<ChangeCircle/>}>
             Switch extension context
         </Button>
-    </Stack>
+    </>
 }

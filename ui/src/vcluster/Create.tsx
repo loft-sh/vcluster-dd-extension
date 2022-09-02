@@ -58,7 +58,7 @@ storage:
         handleClose();
     };
 
-    return <Stack direction="row" spacing={2}>
+    return <>
         <Dialog
             open={open}
             onClose={handleClose}
@@ -156,5 +156,5 @@ storage:
         <Button variant="contained" onClick={handleClickOpen} startIcon={<CreateIcon/>}>
             Create new vcluster
         </Button>
-    </Stack>
+    </>
 }
