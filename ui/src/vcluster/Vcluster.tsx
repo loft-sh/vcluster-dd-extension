@@ -3,7 +3,6 @@ import {createDockerDesktopClient} from '@docker/extension-api-client';
 import "../App.css";
 import ErrorIcon from '@mui/icons-material/Error';
 import {
-    changeExtensionContext,
     checkK8sConnection,
     connectVCluster,
     createVCluster,
@@ -15,15 +14,17 @@ import {
     listNamespaces,
     listVClusters,
     pauseVCluster,
-    resumeVCluster
+    resumeVCluster,
+    setExtensionContext
 } from "../helper/cli";
 import {VClusterList} from "./List";
 import {VClusterCreate} from "./Create";
-import {Alert, Box, CircularProgress, Divider, Grid, Stack} from "@mui/material";
+import {Alert, Box, CircularProgress, Grid, Stack} from "@mui/material";
 import Typography from '@mui/material/Typography';
 import {blueGrey} from "@mui/material/colors";
 import {VClusterChangeContext} from "./VClusterChangeContext";
 import {IsK8sEnabled} from "../helper/constants";
+import {sleep} from "../helper/util";
 
 const ddClient = createDockerDesktopClient();
 
@@ -49,20 +50,6 @@ const refreshContext = async (setContexts: React.Dispatch<React.SetStateAction<a
     // check if the k8s is reachable
     console.log("isK8sEnabled[interval] : ", result[1])
 }
-
-// const checkIfK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
-//     try {
-//         setIsLoading(true);
-//         // let isK8sEnabled = await listHostContexts(ddClient);
-//         setIsLoading(false);
-//         return false;
-//         // return isK8sEnabled
-//     } catch (err) {
-//         console.log("checkIfK8sEnabled error : ", JSON.stringify(err));
-//         setIsLoading(false);
-//     }
-//     return false;
-// }
 
 export const VCluster = () => {
     const [vClusters, setVClusters] = React.useState(undefined);
@@ -111,9 +98,11 @@ export const VCluster = () => {
 
     const changeUIContext = async (context: string) => {
         try {
-            await changeExtensionContext(ddClient, context);
+            await setExtensionContext(ddClient, context);
             ddClient.desktopUI.toast.success("extension context changed successfully");
             setIsLoading(true);
+            // to avoid initial false from kubectl cluster-info command
+            await sleep(1000);
             let isK8sEnabled = await checkK8sConnection(ddClient);
             console.log("isK8sEnabled [switch context] : ", isK8sEnabled)
             if (isK8sEnabled) {
@@ -202,10 +191,6 @@ export const VCluster = () => {
     };
 
     const connectUIVC = async (name: string, namespace: string) => {
-        // const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
-        // if (!nodePortService) {
-        //     ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
-        // } else {
         try {
             const isConnected = await connectVCluster(ddClient, name, namespace);
             if (isConnected) {
@@ -236,51 +221,51 @@ export const VCluster = () => {
         if (localStorage.getItem(IsK8sEnabled) === "true") {
             component = <React.Fragment>
                 <Grid container spacing={2}>
-                    <Grid item xs={6} md={6}>
-                        <Stack direction="row" alignItems="left" justifyContent="left"
-                               divider={<Divider orientation="vertical" flexItem/>}
-                               spacing={2}>
-                            <VClusterCreate
-                                createUIVC={createUIVC}
-                                namespaces={namespaces}/>
-                        </Stack>
+                    <Grid item xs={6} md={6} sx={{paddingLeft: 2}}>
+                        <VClusterCreate
+                            createUIVC={createUIVC}
+                            namespaces={namespaces}/>
                     </Grid>
-                    <Grid item xs={6} md={6}>
-                        <Stack direction="row" alignItems="right" justifyContent="right"
-                               divider={<Divider orientation="vertical" flexItem/>}
-                               spacing={2}>
-                            {getExtensionContext()}
-                            <VClusterChangeContext
-                                changeUIContext={changeUIContext}
-                                contexts={contexts}/>
-                        </Stack>
-                    </Grid>
-                    <Grid item xs={12}>
-                        <VClusterList
-                            upgradeUIVC={upgradeUIVC}
-                            deleteUIVC={deleteUIVC}
-                            pauseUIVC={pauseUIVC}
-                            resumeUIVC={resumeUIVC}
-                            disconnectUIVC={disconnectUIVC}
-                            connectUIVC={connectUIVC}
-                            vClusters={vClusters}
-                            currentHostContext={currentHostContext}
-                        />
+                    <Grid item xs={6} md={6} sx={{padding: 2}} container justifyContent="flex-end">
+                        <VClusterChangeContext
+                            changeUIContext={changeUIContext}
+                            contexts={contexts}/>
+                        |
+                        <Typography variant="h6"> {getExtensionContext()} </Typography>
                     </Grid>
                 </Grid>
+                <VClusterList
+                    upgradeUIVC={upgradeUIVC}
+                    deleteUIVC={deleteUIVC}
+                    pauseUIVC={pauseUIVC}
+                    resumeUIVC={resumeUIVC}
+                    disconnectUIVC={disconnectUIVC}
+                    connectUIVC={connectUIVC}
+                    vClusters={vClusters}
+                    currentHostContext={currentHostContext}
+                />
+
             </React.Fragment>
         } else {
             component = <Box>
-                <VClusterChangeContext
-                    changeUIContext={changeUIContext}
-                    contexts={contexts}/>
+                <Grid container spacing={2}>
+                    <Grid item xs={6} md={6} sx={{padding: 2}} container justifyContent="flex">
+                        <VClusterChangeContext
+                            changeUIContext={changeUIContext}
+                            contexts={contexts}/>
+                        |
+                        <Typography variant="h6"> {getExtensionContext()} </Typography>
+                    </Grid>
+                </Grid>
                 <Alert iconMapping={{
                     error: <ErrorIcon fontSize="inherit"/>,
                 }} severity="error" color="error">
-                    Seems like Kubernetes is not reachable from your Docker Desktop. Please take a look at the <a
-                    href="https://docs.docker.com/desktop/kubernetes/">docker
+                    Seems like Kubernetes is not reachable from your Docker Desktop.
+                    Please take a look at the <a href="https://docs.docker.com/desktop/kubernetes/">docker
                     documentation</a> on how to enable the Kubernetes server in docker-desktop and then select
                     docker-desktop context.
+                    For other type of k8s clusters, check if kube-apiserver of your k8s cluster is reachable from your
+                    host machine.
                 </Alert>
             </Box>
         }
