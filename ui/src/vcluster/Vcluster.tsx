@@ -22,27 +22,31 @@ import {Alert, Box, CircularProgress, Divider, Grid, Stack} from "@mui/material"
 import Typography from '@mui/material/Typography';
 import {blueGrey} from "@mui/material/colors";
 import {VClusterChangeContext} from "./VClusterChangeContext";
+import {IsK8sEnabled} from "../helper/constants";
 
 const ddClient = createDockerDesktopClient();
 
 const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
     try {
-        const result = await Promise.all([getCurrentHostContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
-        setCurrentHostContext(result[0]);
-        setVClusters(result[1]);
-        setNamespaces(result[2]);
-    } catch (err) {
-        console.log(err)
+        if (localStorage.getItem(IsK8sEnabled) === "true") {
+            const result = await Promise.all([getCurrentHostContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
+            setCurrentHostContext(result[0]);
+            setVClusters(result[1]);
+            setNamespaces(result[2]);
+        }
+    } catch (err: any) {
+        if ("stdout" in err && err.stdout.includes("fatal") && err.stdout.includes("find vcluster")) {
+            localStorage.setItem(IsK8sEnabled, "false")
+        }
         console.log("error : ", JSON.stringify(err));
     }
 }
 
-const refreshContext = async (setContexts: React.Dispatch<React.SetStateAction<any>>, setIsK8sEnabled: React.Dispatch<React.SetStateAction<any>>) => {
+const refreshContext = async (setContexts: React.Dispatch<React.SetStateAction<any>>) => {
     const result = await Promise.all([listHostContexts(ddClient), checkK8sConnection(ddClient)]);
     setContexts(result[0]);
     // check if the k8s is reachable
     console.log("isK8sEnabled[interval] : ", result[1])
-    setIsK8sEnabled(result[1])
 }
 
 // const checkIfK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
@@ -64,7 +68,6 @@ export const VCluster = () => {
     const [namespaces, setNamespaces] = React.useState([]);
     const [contexts, setContexts] = React.useState([]);
     const [currentHostContext, setCurrentHostContext] = React.useState("");
-    const [isK8sEnabled, setIsK8sEnabled] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
 
     useEffect(() => {
@@ -72,26 +75,20 @@ export const VCluster = () => {
             let contexts = await listHostContexts(ddClient);
             // @ts-ignore
             setContexts(contexts)
-            let isK8sEnabled = await checkK8sConnection(ddClient);
-            console.log("isK8sEnabled while starting up : ", isK8sEnabled)
-            setIsK8sEnabled(isK8sEnabled)
-            if (isK8sEnabled) {
-                await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
-            }
+            checkK8sConnection(ddClient);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
         })();
 
-        const contextInterval = setInterval(() => refreshContext(setContexts, setIsK8sEnabled), 5000);
+        const contextInterval = setInterval(() => refreshContext(setContexts), 5000);
         const dataInterval = setInterval(() => {
-            if (isK8sEnabled) {
-                return refreshData(setCurrentHostContext, setVClusters, setNamespaces)
-            }
+            return refreshData(setCurrentHostContext, setVClusters, setNamespaces)
         }, 5000);
 
         return () => {
             clearInterval(dataInterval);
             clearInterval(contextInterval);
         }
-    }, [isK8sEnabled]);
+    }, []);
 
     const createUIVC = async (name: string, namespace: string, distro: string, chartVersion: string, values: string) => {
         try {
@@ -118,7 +115,6 @@ export const VCluster = () => {
             setIsLoading(true);
             let isK8sEnabled = await checkK8sConnection(ddClient);
             console.log("isK8sEnabled [switch context] : ", isK8sEnabled)
-            setIsK8sEnabled(isK8sEnabled)
             if (isK8sEnabled) {
                 await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
             }
@@ -236,7 +232,7 @@ export const VCluster = () => {
             />
         </Box>
     } else {
-        if (isK8sEnabled) {
+        if (localStorage.getItem(IsK8sEnabled) === "true") {
             component = <React.Fragment>
                 <Grid container spacing={2}>
                     <Grid item xs={6} md={6}>

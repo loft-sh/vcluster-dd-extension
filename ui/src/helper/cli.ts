@@ -1,5 +1,5 @@
 import {v1} from "@docker/extension-api-client-types";
-import {CurrentExtensionContext, DockerDesktop} from "./constants";
+import {CurrentExtensionContext, DockerDesktop, IsK8sEnabled} from "./constants";
 
 // Common function to call host.cli.exec
 const hostCli = async (ddClient: v1.DockerDesktopClient, command: string, args: string[]) => {
@@ -148,7 +148,7 @@ export const listNamespaces = async (ddClient: v1.DockerDesktopClient) => {
 // Lists all services from docker-desktop kubernetes
 export const listNodePortServices = async (ddClient: v1.DockerDesktopClient) => {
     // kubectl get svc -A --no-headers -o custom-columns=":metadata.name, :metadata.namespace, :spec.type"  | grep NodePort
-    let output = await hostCli(ddClient, "kubectl", ["get", "services", "-A", "--no-headers", "-o", "custom-columns=\":metadata.name, :metadata.namespace, :spec.type\"", "|", "grep", "NodePort"]);
+    let output = await hostCli(ddClient, "kubectl", ["get", "services", "-A", "--no-headers", "--context", getExtensionContext(), "-o", "custom-columns=\":metadata.name, :metadata.namespace, :spec.type\"", "|", "grep", "NodePort"]);
     if (output?.stderr) {
         console.log("[listServices] : ", output.stderr);
         return [];
@@ -284,18 +284,20 @@ export const getCurrentHostContext = async (ddClient: v1.DockerDesktopClient) =>
 // Retrieves `kubectl cluster-info` context-wise
 export const checkK8sConnection = async (ddClient: v1.DockerDesktopClient) => {
     // kubectl cluster-info --context context-name
-    // "--request-timeout", "500s",
+
     try {
-        let output = await hostCli(ddClient, "kubectl", ["cluster-info", "--context", getExtensionContext()]);
+        let output = await hostCli(ddClient, "kubectl", ["cluster-info","--request-timeout", "2s", "--context", getExtensionContext()]);
         if (output?.stderr) {
             console.log("[checkK8sConnection] : ", output.stderr);
+            localStorage.setItem(IsK8sEnabled, "false")
             return false;
         }
         if (output?.stdout) {
             console.log("[checkK8sConnection] : ", output?.stdout)
         }
+        localStorage.setItem(IsK8sEnabled, "true")
         return true
-    } catch (e) {
+    } catch (e: any) {
         console.log("[checkK8sConnection] error : ", e)
         return false
     }
