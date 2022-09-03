@@ -10,6 +10,7 @@ import {
     deleteVCluster,
     disconnectVCluster,
     getCurrentHostContext,
+    getExtensionContext,
     listHostContexts,
     listNamespaces,
     listVClusters,
@@ -248,6 +249,7 @@ export const VCluster = () => {
                         <Stack direction="row" alignItems="right" justifyContent="right"
                                divider={<Divider orientation="vertical" flexItem/>}
                                spacing={2}>
+                            {getExtensionContext()}
                             <VClusterChangeContext
                                 changeUIContext={changeUIContext}
                                 contexts={contexts}/>

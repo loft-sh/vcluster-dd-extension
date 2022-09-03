@@ -1,4 +1,0 @@
-services:
-  vcluster:
-    image: ${DESKTOP_PLUGIN_IMAGE}
-    network_mode: "host"
