@@ -68,10 +68,7 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     && chmod +x ./kubectl.exe && mv ./kubectl.exe /windows/ \
     && chmod +x ./vcluster.exe && mv ./vcluster.exe /windows/
 
-RUN mkdir -p /root/.kube
-RUN touch /root/.kube/config
-ENV KUBECONFIG=/root/.kube/config
-COPY docker-compose.yaml .
+#COPY docker-compose.yaml .
 COPY metadata.json .
 COPY vcluster.svg .
 COPY --from=builder /backend/bin/service /

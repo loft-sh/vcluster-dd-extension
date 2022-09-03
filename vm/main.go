@@ -43,7 +43,6 @@ func main() {
 	}
 
 	router.Listener = ln
-	router.POST("/store-kube-config", storeKubeConfig)
 	router.POST("/store-values", storeValues)
 	log.Fatal(router.Start(startURL))
 }
@@ -54,21 +53,6 @@ func listen(path string) (net.Listener, error) {
 
 type Payload struct {
 	Data string `json:"data"`
-}
-
-// storeKubeConfig stores the kubeconfig from the request in the container filesystem
-func storeKubeConfig(ctx echo.Context) error {
-	payload := &Payload{}
-	if err := ctx.Bind(payload); err != nil {
-		return err
-	}
-	const kubeConfigFilePath = "/root/.kube/config"
-	data := []byte(payload.Data)
-	err := os.WriteFile(kubeConfigFilePath, data, 0644)
-	if err != nil {
-		panic(err)
-	}
-	return ctx.JSON(http.StatusCreated, kubeConfigFilePath)
 }
 
 // storeValues stores the values required for `vcluster create`

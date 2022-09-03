@@ -1,6 +1,5 @@
 import React, {ChangeEvent} from "react";
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField} from "@mui/material";
-import {AsyncButton} from "./AsyncButton/AsyncButton";
 import {ChangeCircle} from "@mui/icons-material";
 
 type Props = {
@@ -27,7 +26,7 @@ export const VClusterChangeContext = (props: Props) => {
 
     const changeUIContext = async (event: React.MouseEvent<HTMLElement>) => {
         event.preventDefault();
-        await props.changeUIContext(context);
+        props.changeUIContext(context);
         handleClose();
     };
 
@@ -37,7 +36,7 @@ export const VClusterChangeContext = (props: Props) => {
             onClose={handleClose}
             aria-labelledby="form-dialog-title">
             <DialogTitle id="form-dialog-title" align={"left"}>
-                Switch extension context
+                Switch k8s context
             </DialogTitle>
             <form noValidate>
                 <DialogContent>
@@ -62,22 +61,19 @@ export const VClusterChangeContext = (props: Props) => {
                     <Button onClick={handleClose} color="secondary" variant="outlined">
                         Cancel
                     </Button>
-                    <AsyncButton
-                        buttonType="normal"
+                    <Button
                         color="primary"
                         variant="contained"
-                        onClickAsync={async (e) =>
-                            await changeUIContext(e)
-                        }
+                        onClick={changeUIContext}
                         disabled={context === ""}
                         type="submit">
                         Switch
-                    </AsyncButton>
+                    </Button>
                 </DialogActions>
             </form>
         </Dialog>
         <Button variant="contained" onClick={handleClickOpen} startIcon={<ChangeCircle/>}>
-            Switch extension context
+            Switch k8s context
         </Button>
     </>
 }

@@ -1,9 +1,5 @@
 import {v1} from "@docker/extension-api-client-types";
-
-// Common function to call vm.cli.exec
-// const cli = async (ddClient: v1.DockerDesktopClient, command: string, args: string[]) => {
-//     return ddClient.extension.vm?.cli.exec(command, args);
-// }
+import {CurrentExtensionContext, DockerDesktop} from "./constants";
 
 // Common function to call host.cli.exec
 const hostCli = async (ddClient: v1.DockerDesktopClient, command: string, args: string[]) => {
@@ -14,10 +10,24 @@ const storeValuesFileInContainer = async (ddClient: v1.DockerDesktopClient, valu
     return ddClient.extension.vm?.service?.post("/store-values", {data: values});
 }
 
-// Retrieves all the vclusters from docker-desktop kubernetes
+// check if the context is of vcluster
+const isVclusterContext = (originalContext: string, contexts: Context[]) => {
+    const splitted = originalContext.split("_")
+    if (splitted.length < 4) {
+        return false
+    }
+
+    let context = splitted.slice(3).join("-");
+    if (contexts.filter(e => e.name === context).length > 0) {
+        return originalContext.startsWith("vcluster_")
+    }
+    return false
+}
+
+// Retrieves all the vclusters from specified kubernetes
 export const listVClusters = async (ddClient: v1.DockerDesktopClient) => {
     // vcluster list --output json
-    let output = await hostCli(ddClient, "vcluster", ["list", "--output", "json"]);
+    let output = await hostCli(ddClient, "vcluster", ["list", "--output", "json", "--context", getExtensionContext()]);
     if (output?.stderr) {
         console.log("[listVClusters] : ", output.stderr)
         return [];
@@ -25,10 +35,10 @@ export const listVClusters = async (ddClient: v1.DockerDesktopClient) => {
     return JSON.parse(output?.stdout || "[]");
 }
 
-// Create vcluster on docker-desktop kubernetes
+// Create vcluster on kubernetes
 export const createVCluster = async (ddClient: v1.DockerDesktopClient, name: string,
                                      namespace: string, distro: string, chartVersion: string,
-                                     values: string, context: string, isUpgrade?: boolean) => {
+                                     values: string, isUpgrade?: boolean) => {
     // vcluster create name -n namespace --distro k3s --chart-version 0.9.1 --values string
     let args = ["create", name];
 
@@ -55,7 +65,7 @@ export const createVCluster = async (ddClient: v1.DockerDesktopClient, name: str
         }
     }
     args.push("--connect=false");
-    args.push("--context", context)
+    args.push("--context", getExtensionContext())
     if (isUpgrade) {
         args.push("--upgrade")
     }
@@ -70,9 +80,9 @@ export const createVCluster = async (ddClient: v1.DockerDesktopClient, name: str
 }
 
 // Resumes the vcluster
-export const resumeVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string, context: string) => {
+export const resumeVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string) => {
     // vcluster resume cluster-2 -n vcluster-dev
-    let output = await hostCli(ddClient, "vcluster", ["resume", name, "-n", namespace, "--context", context]);
+    let output = await hostCli(ddClient, "vcluster", ["resume", name, "-n", namespace, "--context", getExtensionContext()]);
     if (output?.stderr) {
         console.log("[resumeVCluster] : ", output.stderr);
         return false;
@@ -81,9 +91,9 @@ export const resumeVCluster = async (ddClient: v1.DockerDesktopClient, name: str
 }
 
 // Pauses the vcluster
-export const pauseVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string, context: string) => {
+export const pauseVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string) => {
     // vcluster pause cluster-2 -n vcluster-dev
-    let output = await hostCli(ddClient, "vcluster", ["pause", name, "-n", namespace, "--context", context]);
+    let output = await hostCli(ddClient, "vcluster", ["pause", name, "-n", namespace, "--context", getExtensionContext()]);
     if (output?.stderr) {
         console.log("[pauseVCluster] : ", output.stderr);
         return false;
@@ -92,14 +102,14 @@ export const pauseVCluster = async (ddClient: v1.DockerDesktopClient, name: stri
 }
 
 // Deletes the vcluster
-export const deleteVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string, context: string) => {
+export const deleteVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string) => {
     // vcluster delete name -n namespace
-    let output = await hostCli(ddClient, "vcluster", ["delete", name, "-n", namespace, "--context", context]);
+    let output = await hostCli(ddClient, "vcluster", ["delete", name, "-n", namespace, "--context", getExtensionContext()]);
     if (output?.stderr) {
         console.log("[deleteVCluster] : ", output.stderr);
         return false;
     }
-    const contextName = getVClusterContextName(name, namespace, context)
+    const contextName = getVClusterContextName(name, namespace)
     try {
         const result = await Promise.all([
             hostCli(ddClient, "kubectl", ["config", "unset", "users." + contextName]),
@@ -112,14 +122,14 @@ export const deleteVCluster = async (ddClient: v1.DockerDesktopClient, name: str
     return true;
 }
 
-const getVClusterContextName = (vClusterName: string, vClusterNamespace: string, currentContext: string) => {
-    return "vcluster_" + vClusterName + "_" + vClusterNamespace + "_" + currentContext
+const getVClusterContextName = (vClusterName: string, vClusterNamespace: string) => {
+    return "vcluster_" + vClusterName + "_" + vClusterNamespace + "_" + getExtensionContext()
 }
 
 // Lists all namespaces from docker-desktop kubernetes
 export const listNamespaces = async (ddClient: v1.DockerDesktopClient) => {
-    // kubectl get ns --no-headers -o custom-columns=":metadata.name"
-    let output = await hostCli(ddClient, "kubectl", ["get", "namespaces", "--no-headers", "-o", "custom-columns=\":metadata.name\""]);
+    // kubectl get ns --no-headers -o custom-columns=":metadata.name --context extension context"
+    let output = await hostCli(ddClient, "kubectl", ["get", "namespaces", "--no-headers", "-o", "custom-columns=\":metadata.name\"", "--context", getExtensionContext()]);
     if (output?.stderr) {
         console.log("[listNamespaces] : ", output.stderr);
         return [];
@@ -182,10 +192,9 @@ export const isNodePortServiceAvailableForVcluster = async (ddClient: v1.DockerD
 }
 
 // Runs `vcluster disconnect` command on host and changes the context back to older context.
-// noinspection JSUnusedLocalSymbols
-export const disconnectVCluster = async (ddClient: v1.DockerDesktopClient, namespace: string, context: string) => {
+export const disconnectVCluster = async (ddClient: v1.DockerDesktopClient, namespace: string) => {
     // vcluster disconnect --namespace namespace --context context
-    const disconnect = await hostCli(ddClient, "vcluster", ["disconnect", "-n", namespace, "--context", context])
+    const disconnect = await hostCli(ddClient, "vcluster", ["disconnect", "-n", namespace])
     if (disconnect?.stderr) {
         console.log("[disconnectVCluster] : ", disconnect.stderr);
         return false;
@@ -195,11 +204,11 @@ export const disconnectVCluster = async (ddClient: v1.DockerDesktopClient, names
 }
 
 // Runs `vcluster connect` command on host and changes the context is changed internally.
-export const connectVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string, context: string) => {
+export const connectVCluster = async (ddClient: v1.DockerDesktopClient, name: string, namespace: string) => {
     const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
     if (!nodePortService) {
         // vcluster connect name -n namespace --background-proxy
-        const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--background-proxy", "--context", context]);
+        const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--background-proxy"]);
         if (connect?.stderr) {
             console.log("[connectVCluster] : ", connect.stderr);
             return false;
@@ -207,7 +216,7 @@ export const connectVCluster = async (ddClient: v1.DockerDesktopClient, name: st
         return true;
     } else {
         // vcluster connect name -n namespace
-        const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--context", context]);
+        const connect = await hostCli(ddClient, "vcluster", ["connect", name, "-n", namespace, "--context", getExtensionContext()]);
         if (connect?.stderr) {
             console.log("[connectVCluster] : ", connect.stderr);
             return false;
@@ -216,64 +225,34 @@ export const connectVCluster = async (ddClient: v1.DockerDesktopClient, name: st
     }
 }
 
-// Gets kubeconfig file from local and save it in container's /root/.kube/config file-system.
-// We have to use the vm.service to call the post api to store the kubeconfig retrieved. Without post api in vm.service
-// all the combinations of commands fail
-export const listHostContexts = async (ddClient: v1.DockerDesktopClient) => {
-    // kubectl config view --raw
-    let kubeConfig = await hostCli(ddClient, "kubectl", ["config", "view", "--raw"]);
-    if (kubeConfig?.stderr) {
-        console.log("[listHostContexts] : ", kubeConfig?.stderr);
-        return false;
-    }
-
-    // call backend to store the kubeconfig retrieved
-    try {
-        await ddClient.extension.vm?.service?.post("/store-kube-config", {data: kubeConfig?.stdout})
-    } catch (err) {
-        console.log("error while posting kubeconfig to server", JSON.stringify(err));
-    }
-    try {
-        let output = await checkK8sConnection(ddClient);
-        if (output?.stderr) {
-            console.log("[checkK8sConnection] : ", output.stderr);
-            return false;
-        }
-        if (output?.stdout) {
-            console.log("[checkK8sConnection] : ", output?.stdout)
-        }
-        return true
-    } catch (e) {
-        console.log("[checkK8sConnection] error : ", e)
-        return false
-    }
+interface ContextDetails {
+    cluster: string,
+    user: string
 }
 
-// Lists all contexts from extension
-export const listExtensionContexts = async (ddClient: v1.DockerDesktopClient) => {
+interface Context {
+    name: string,
+    context: ContextDetails
+}
+
+// Lists all contexts from host
+export const listHostContexts = async (ddClient: v1.DockerDesktopClient) => {
     // kubectl config view -o jsonpath='{.contexts}'
     let output = await hostCli(ddClient, "kubectl", ["config", "view", "-o", "jsonpath='{.contexts}'"]);
     if (output?.stderr) {
-        console.log("[listExtensionContexts] : ", output.stderr);
+        console.log("[listHostContexts] : ", output.stderr);
         return [];
     }
 
     const ctxNameList: string[] = []
-    console.log(output?.stdout)
 
     if (output) {
-        interface ContextDetails {
-            cluster: string,
-            user: string
-        }
-
-        interface Context {
-            name: string,
-            context: ContextDetails
-        }
-
-        JSON.parse(output.stdout).forEach((context: Context) => {
-            ctxNameList.push(context.name);
+        const contexts = JSON.parse(output.stdout)
+        contexts.forEach((context: Context) => {
+            let vclusterContext = isVclusterContext(context.name, contexts);
+            if (!vclusterContext) {
+                ctxNameList.push(context.name);
+            }
         });
     }
     return ctxNameList;
@@ -281,26 +260,14 @@ export const listExtensionContexts = async (ddClient: v1.DockerDesktopClient) =>
 
 // Change context on extension container
 export const changeExtensionContext = async (ddClient: v1.DockerDesktopClient, context: string) => {
-    // change context using kubectl
-    let output = await hostCli(ddClient, "kubectl", ["config", "use-context", context]);
-    console.log("context : ", context)
-    console.log("output : ", output)
-    if (output?.stderr) {
-        console.log("[changeContext] : ", output.stderr);
-        return false;
-    }
-    return true;
+    // update current extension context using localstorage
+    localStorage.setItem(CurrentExtensionContext, context);
 }
 
-// Retrieves extensions's current k8s context
-export const getCurrentExtensionContext = async (ddClient: v1.DockerDesktopClient) => {
-    // kubectl config view -o jsonpath='{.current-context}'
-    let output = await hostCli(ddClient, "kubectl", ["config", "view", "-o", "jsonpath='{.current-context}'"]);
-    if (output?.stderr) {
-        console.log("[getCurrentExtensionContext] : ", output.stderr);
-        return {};
-    }
-    return output?.stdout;
+// Change context on extension container
+export const getExtensionContext = () => {
+    // retrieve extension current context
+    return localStorage.getItem(CurrentExtensionContext) || DockerDesktop;
 }
 
 // Retrieves host's current k8s context
@@ -314,8 +281,22 @@ export const getCurrentHostContext = async (ddClient: v1.DockerDesktopClient) =>
     return output?.stdout;
 }
 
-// Retrieves kubectl cluster-info
+// Retrieves `kubectl cluster-info` context-wise
 export const checkK8sConnection = async (ddClient: v1.DockerDesktopClient) => {
-    // kubectl cluster-info
-    return await hostCli(ddClient, "kubectl", ["cluster-info"]);
+    // kubectl cluster-info --context context-name
+    // "--request-timeout", "500s",
+    try {
+        let output = await hostCli(ddClient, "kubectl", ["cluster-info", "--context", getExtensionContext()]);
+        if (output?.stderr) {
+            console.log("[checkK8sConnection] : ", output.stderr);
+            return false;
+        }
+        if (output?.stdout) {
+            console.log("[checkK8sConnection] : ", output?.stdout)
+        }
+        return true
+    } catch (e) {
+        console.log("[checkK8sConnection] error : ", e)
+        return false
+    }
 }

@@ -4,13 +4,12 @@ import "../App.css";
 import ErrorIcon from '@mui/icons-material/Error';
 import {
     changeExtensionContext,
+    checkK8sConnection,
     connectVCluster,
     createVCluster,
     deleteVCluster,
     disconnectVCluster,
-    getCurrentExtensionContext,
     getCurrentHostContext,
-    listExtensionContexts,
     listHostContexts,
     listNamespaces,
     listVClusters,
@@ -26,103 +25,87 @@ import {VClusterChangeContext} from "./VClusterChangeContext";
 
 const ddClient = createDockerDesktopClient();
 
-const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setCurrentExtensionContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>, setContexts: React.Dispatch<React.SetStateAction<any>>) => {
+const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
     try {
-        const result = await Promise.all([getCurrentHostContext(ddClient), getCurrentExtensionContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient), listExtensionContexts(ddClient)]);
+        const result = await Promise.all([getCurrentHostContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
         setCurrentHostContext(result[0]);
-        setCurrentExtensionContext(result[1]);
-        setVClusters(result[2]);
-        setNamespaces(result[3]);
-        setContexts(result[4]);
+        setVClusters(result[1]);
+        setNamespaces(result[2]);
     } catch (err) {
-        console.log("error", JSON.stringify(err));
-        setCurrentHostContext("");
+        console.log(err)
+        console.log("error : ", JSON.stringify(err));
     }
 }
 
-const refreshContext = async (setIsK8sEnabled: React.Dispatch<React.SetStateAction<any>>, currentExtensionContext: string, setCurrentExtensionContext: React.Dispatch<React.SetStateAction<any>>) => {
-    // fetch fresh contexts from host and check if the k8s is running
-    let isK8sEnabled = await listHostContexts(ddClient);
-    console.log("isK8sEnabled[interval] : ", isK8sEnabled)
-    setIsK8sEnabled(isK8sEnabled)
-    if (isK8sEnabled) {
-        // if user has changed context on local and is different than the chosen by user of extension. Reset it to back earlier context
-        let currentHostContext = await getCurrentHostContext(ddClient)
-        console.log("currentHostContext : ", currentHostContext)
-        console.log("currentExtensionContext : ", currentExtensionContext)
-        if (currentExtensionContext !== currentHostContext) {
-            setCurrentExtensionContext(currentExtensionContext)
-        }
-    } else {
-        let currentHostContext = await getCurrentHostContext(ddClient)
-        console.log("currentHostContext : ", currentHostContext)
-        console.log("currentExtensionContext : ", currentExtensionContext)
-        if (currentExtensionContext !== currentHostContext) {
-            if (currentExtensionContext !== "") {
-                setCurrentExtensionContext(currentExtensionContext)
-            } else {
-                setCurrentExtensionContext(currentHostContext)
-            }
-        }
-    }
+const refreshContext = async (setContexts: React.Dispatch<React.SetStateAction<any>>, setIsK8sEnabled: React.Dispatch<React.SetStateAction<any>>) => {
+    const result = await Promise.all([listHostContexts(ddClient), checkK8sConnection(ddClient)]);
+    setContexts(result[0]);
+    // check if the k8s is reachable
+    console.log("isK8sEnabled[interval] : ", result[1])
+    setIsK8sEnabled(result[1])
 }
 
-const checkIfK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
-    try {
-        setIsLoading(true);
-        let isK8sEnabled = await listHostContexts(ddClient);
-        setIsLoading(false);
-        return isK8sEnabled
-    } catch (err) {
-        console.log("checkIfK8sEnabled error : ", JSON.stringify(err));
-        setIsLoading(false);
-    }
-    return false;
-}
+// const checkIfK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
+//     try {
+//         setIsLoading(true);
+//         // let isK8sEnabled = await listHostContexts(ddClient);
+//         setIsLoading(false);
+//         return false;
+//         // return isK8sEnabled
+//     } catch (err) {
+//         console.log("checkIfK8sEnabled error : ", JSON.stringify(err));
+//         setIsLoading(false);
+//     }
+//     return false;
+// }
 
 export const VCluster = () => {
     const [vClusters, setVClusters] = React.useState(undefined);
     const [namespaces, setNamespaces] = React.useState([]);
     const [contexts, setContexts] = React.useState([]);
     const [currentHostContext, setCurrentHostContext] = React.useState("");
-    const [currentExtensionContext, setCurrentExtensionContext] = React.useState("");
     const [isK8sEnabled, setIsK8sEnabled] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
 
     useEffect(() => {
         (async () => {
-            let isK8sEnabled = await checkIfK8sEnabled(setIsLoading);
+            let contexts = await listHostContexts(ddClient);
+            // @ts-ignore
+            setContexts(contexts)
+            let isK8sEnabled = await checkK8sConnection(ddClient);
             console.log("isK8sEnabled while starting up : ", isK8sEnabled)
-            await setIsK8sEnabled(isK8sEnabled)
+            setIsK8sEnabled(isK8sEnabled)
             if (isK8sEnabled) {
-                await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
+                await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
             }
         })();
-        const contextInterval = setInterval(() => refreshContext(setIsK8sEnabled, currentExtensionContext, setCurrentExtensionContext), 5000);
+
+        const contextInterval = setInterval(() => refreshContext(setContexts, setIsK8sEnabled), 5000);
         const dataInterval = setInterval(() => {
             if (isK8sEnabled) {
-                return refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts)
+                return refreshData(setCurrentHostContext, setVClusters, setNamespaces)
             }
         }, 5000);
+
         return () => {
             clearInterval(dataInterval);
             clearInterval(contextInterval);
         }
-    }, [isK8sEnabled, currentExtensionContext]);
+    }, [isK8sEnabled]);
 
     const createUIVC = async (name: string, namespace: string, distro: string, chartVersion: string, values: string) => {
         try {
             if (!namespace) {
                 namespace = "vcluster-" + name.toLowerCase();
             }
-            const isCreated = await createVCluster(ddClient, name, namespace, distro, chartVersion, values, currentExtensionContext);
+            const isCreated = await createVCluster(ddClient, name, namespace, distro, chartVersion, values);
             if (isCreated) {
                 ddClient.desktopUI.toast.success("vcluster created successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster create failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster create failed: " + JSON.stringify(err));
         }
@@ -130,13 +113,16 @@ export const VCluster = () => {
 
     const changeUIContext = async (context: string) => {
         try {
-            const isChanged = await changeExtensionContext(ddClient, context);
-            if (isChanged) {
-                ddClient.desktopUI.toast.success("extension context changed successfully");
-            } else {
-                ddClient.desktopUI.toast.error("extension context change failed");
+            await changeExtensionContext(ddClient, context);
+            ddClient.desktopUI.toast.success("extension context changed successfully");
+            setIsLoading(true);
+            let isK8sEnabled = await checkK8sConnection(ddClient);
+            console.log("isK8sEnabled [switch context] : ", isK8sEnabled)
+            setIsK8sEnabled(isK8sEnabled)
+            if (isK8sEnabled) {
+                await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
             }
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            setIsLoading(false)
         } catch (err) {
             ddClient.desktopUI.toast.error("extension context change failed: " + JSON.stringify(err));
         }
@@ -145,14 +131,14 @@ export const VCluster = () => {
     const upgradeUIVC = async (name: string, namespace: string, chartVersion: string, values: string) => {
         try {
             // Using the same createVCluster function for the upgrade operation. Distro upgrade is not supported
-            const isUpgraded = await createVCluster(ddClient, name, namespace, "", chartVersion, values, currentExtensionContext, true);
+            const isUpgraded = await createVCluster(ddClient, name, namespace, "", chartVersion, values, true);
             if (isUpgraded) {
                 ddClient.desktopUI.toast.success("vcluster upgraded successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster upgrade failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster upgrade failed: " + JSON.stringify(err));
         }
@@ -160,14 +146,14 @@ export const VCluster = () => {
 
     const deleteUIVC = async (name: string, namespace: string) => {
         try {
-            const isDeleted = await deleteVCluster(ddClient, name, namespace, currentExtensionContext);
+            const isDeleted = await deleteVCluster(ddClient, name, namespace);
             if (isDeleted) {
                 ddClient.desktopUI.toast.success("vcluster deleted successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster[" + namespace + ":" + name + "] delete failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster delete failed: " + JSON.stringify(err));
         }
@@ -175,14 +161,14 @@ export const VCluster = () => {
 
     const pauseUIVC = async (name: string, namespace: string) => {
         try {
-            const isPaused = await pauseVCluster(ddClient, name, namespace, currentExtensionContext);
+            const isPaused = await pauseVCluster(ddClient, name, namespace);
             if (isPaused) {
                 ddClient.desktopUI.toast.success("vcluster paused successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster pause failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster pause failed: " + JSON.stringify(err));
         }
@@ -190,29 +176,29 @@ export const VCluster = () => {
 
     const resumeUIVC = async (name: string, namespace: string) => {
         try {
-            const isResumed = await resumeVCluster(ddClient, name, namespace, currentExtensionContext);
+            const isResumed = await resumeVCluster(ddClient, name, namespace);
             if (isResumed) {
                 ddClient.desktopUI.toast.success("vcluster resumed successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster resume failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster resume failed : " + JSON.stringify(err));
         }
     };
 
-    const disconnectUIVC = async (namespace: string, context: string) => {
+    const disconnectUIVC = async (namespace: string) => {
         try {
-            const isDisconnected = await disconnectVCluster(ddClient, namespace, context);
+            const isDisconnected = await disconnectVCluster(ddClient, namespace);
             if (isDisconnected) {
                 ddClient.desktopUI.toast.success("vcluster disconnected successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster disconnect failed");
             }
 
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster disconnect failed: " + JSON.stringify(err));
         }
@@ -224,13 +210,13 @@ export const VCluster = () => {
         //     ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
         // } else {
         try {
-            const isConnected = await connectVCluster(ddClient, name, namespace, currentExtensionContext);
+            const isConnected = await connectVCluster(ddClient, name, namespace);
             if (isConnected) {
                 ddClient.desktopUI.toast.success("vcluster connected successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster connect failed");
             }
-            await refreshData(setCurrentHostContext, setCurrentExtensionContext, setVClusters, setNamespaces, setContexts);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
         }
