@@ -1,20 +1,3 @@
-FROM golang:1.18.3-alpine3.16 AS builder
-ENV CGO_ENABLED=0
-
-RUN apk add --update make
-
-WORKDIR /backend
-
-COPY Makefile Makefile
-COPY go.mod go.mod
-COPY go.sum go.sum
-COPY vendor/ vendor/
-COPY vm/ vm/
-
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    make bin
-
 FROM --platform=$BUILDPLATFORM node:18.3.0-alpine3.16 AS client-builder
 
 WORKDIR /ui
@@ -48,10 +31,8 @@ RUN apk add curl
 RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl \
     && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl \
     && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
-#    && curl -s -Lo vcluster https://github.com/loft-sh/vcluster/releases/download/v0.11.2-alpha.0/vcluster-linux-amd64 \
+#    && curl -s -Lo vcluster https://github.com/loft-sh/vcluster/releases/download/v0.12.0-beta.1/vcluster-linux-amd64 \
     && chmod +x vcluster && mv vcluster /usr/local/bin \
-    && curl -LO https://get.helm.sh/helm-v3.9.0-linux-amd64.tar.gz \
-    && tar -xzf helm-v3.9.0-linux-amd64.tar.gz && mv linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && rm helm-v3.9.0-linux-amd64.tar.gz \
     && mkdir /linux \
     && cp /usr/local/bin/kubectl /linux/ \
     && cp /usr/local/bin/vcluster /linux/
@@ -70,6 +51,4 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 
 COPY metadata.json .
 COPY vcluster.svg .
-COPY --from=builder /backend/bin/service /
 COPY --from=client-builder /ui/build ui
-CMD /service -socket /run/guest-services/vcluster-dd-extension.sock

@@ -8,9 +8,9 @@ const hostCli = async (ddClient: v1.DockerDesktopClient, command: string, args: 
     return ddClient.extension.host?.cli.exec(command, args);
 }
 
-// store values in docker-desktop rest service
-const storeValuesFileInContainer = async (ddClient: v1.DockerDesktopClient, values: string) => {
-    return ddClient.extension.vm?.service?.post("/store-values", {data: values});
+// convert values string to Base64 Format
+const convertValuesToBase64Format = async (values: string) => {
+    return window.btoa(values);
 }
 
 // vcluster commands
@@ -36,9 +36,9 @@ export const createVCluster = async (ddClient: v1.DockerDesktopClient, name: str
     if (values) {
         // call backend to store the values
         try {
-            let fileName = await storeValuesFileInContainer(ddClient, values);
+            let base64FormatValues = await convertValuesToBase64Format(values);
             args.push("--extra-values");
-            args.push(JSON.stringify(fileName));
+            args.push(base64FormatValues);
         } catch (err) {
             console.log("error", JSON.stringify(err));
         }
