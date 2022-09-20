@@ -30,21 +30,20 @@ LABEL org.opencontainers.image.title="vcluster" \
 RUN apk add curl
 RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl \
     && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-linux-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
-#    && curl -s -Lo vcluster https://github.com/loft-sh/vcluster/releases/download/v0.12.0-beta.1/vcluster-linux-amd64 \
+    && curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64" \
     && chmod +x vcluster && mv vcluster /usr/local/bin \
     && mkdir /linux \
     && cp /usr/local/bin/kubectl /linux/ \
     && cp /usr/local/bin/vcluster /linux/
 
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl" \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-darwin-amd64)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster \
+    && curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-darwin-amd64" \
     && mkdir /darwin \
     && chmod +x ./kubectl && mv ./kubectl /darwin/ \
     && chmod +x ./vcluster && mv ./vcluster /darwin/
 
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/windows/amd64/kubectl.exe" \
-    && curl -s -L "https://github.com/loft-sh/vcluster/releases/latest" | sed -nE 's!.*"([^"]*vcluster-windows-amd64.exe)".*!https://github.com\1!p' | xargs -n 1 curl -L -o vcluster.exe \
+    && curl -L -o vcluster.exe "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-windows-amd64.exe" \
     && mkdir /windows \
     && chmod +x ./kubectl.exe && mv ./kubectl.exe /windows/ \
     && chmod +x ./vcluster.exe && mv ./vcluster.exe /windows/

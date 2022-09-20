@@ -28,9 +28,13 @@ import {sleep} from "../helper/util";
 
 const ddClient = createDockerDesktopClient();
 
+const isK8sEnabled = () => {
+    return localStorage.getItem(IsK8sEnabled) === "true";
+}
+
 const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
     try {
-        if (localStorage.getItem(IsK8sEnabled) === "true") {
+        if (isK8sEnabled()) {
             const result = await Promise.all([getCurrentHostContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
             setCurrentHostContext(result[0]);
             setVClusters(result[1]);
@@ -218,7 +222,7 @@ export const VCluster = () => {
             />
         </Box>
     } else {
-        if (localStorage.getItem(IsK8sEnabled) === "true") {
+        if (isK8sEnabled()) {
             component = <React.Fragment>
                 <Grid container spacing={2}>
                     <Grid item xs={6} md={6} sx={{paddingLeft: 2}}>
