@@ -42,8 +42,10 @@ cp docker-extension ~/.docker/cli-plugins/
 ```
 
 ### Enable kubernetes and docker extensions
+
 In Docker Desktop,
-1.  Go to Preferences -> Kubernetes -> Check
+
+1. Go to Preferences -> Kubernetes -> Check
    "Enable kubernetes".
 2. Go to Preferences -> Extensions -> Check
    "Enable Docker Extensions".
@@ -51,17 +53,21 @@ In Docker Desktop,
 ### Three ways to run extension
 
 #### Running published extension
+
 The standard way to get the vcluster extension for Docker Desktop is by using the Docker Marketplace. This will install
 the officially released version of the extension.
 
 Go to Dashboard -> Add Extensions -> Click on Marketplace tab -> Search for vcluster -> Click on Install
 
 #### Or Running unpublished extension
-This is done when the testers/release-engineers want to verify the functionality from unpublished version with docker image released. Users can fire below command to install the extension on their machines.
+
+This is done when the testers/release-engineers want to verify the functionality from unpublished version with docker
+image released. Users can fire below command to install the extension on their machines.
 
 `docker extension install loftsh/vcluster-dd-extension:0.0.7`
 
 #### Or Building and Installing extension
+
 If you are making local changes and would like to try them out, you will need
 to follow these steps:
 
@@ -71,7 +77,9 @@ to follow these steps:
    ```sh
    make build-install
    ```
+
 ### Navigate to extension
+
 From the Docker Dashboard you can now navigate to the Extensions section. It should now list *vcluster* as one of the
 available extensions. Click on *vcluster* from the list and you should be presented with the UI for managing the virtual
 clusters created on docker-desktop kubernetes.

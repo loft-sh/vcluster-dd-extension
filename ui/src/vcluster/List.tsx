@@ -26,7 +26,7 @@ import {AsyncButton} from './AsyncButton/AsyncButton';
 
 type Props = {
     vClusters: undefined,
-    currentK8sContext: string,
+    currentHostContext: string,
     pauseUIVC: (name: string, namespace: string) => void
     resumeUIVC: (name: string, namespace: string) => void
     deleteUIVC: (name: string, namespace: string) => void,
@@ -171,7 +171,7 @@ storage:
     }
 
     const isConnected = (name: string, namespace: string, context: string) => {
-        return props.currentK8sContext === getVClusterContextName(name, namespace, context);
+        return props.currentHostContext === getVClusterContextName(name, namespace, context);
     }
 
     const columns: GridColDef[] = [{

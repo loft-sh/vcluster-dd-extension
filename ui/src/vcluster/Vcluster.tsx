@@ -3,93 +3,84 @@ import {createDockerDesktopClient} from '@docker/extension-api-client';
 import "../App.css";
 import ErrorIcon from '@mui/icons-material/Error';
 import {
+    checkK8sConnection,
     connectVCluster,
     createVCluster,
     deleteVCluster,
     disconnectVCluster,
-    getCurrentK8sContext,
-    isNodePortServiceAvailableForVcluster,
+    getCurrentHostContext,
+    getExtensionContext,
+    listHostContexts,
     listNamespaces,
     listVClusters,
     pauseVCluster,
     resumeVCluster,
-    updateDockerDesktopK8sKubeConfig
+    setExtensionContext
 } from "../helper/cli";
 import {VClusterList} from "./List";
 import {VClusterCreate} from "./Create";
-import {Alert, Box, CircularProgress, Stack} from "@mui/material";
+import {Alert, Box, CircularProgress, Grid, Stack} from "@mui/material";
 import Typography from '@mui/material/Typography';
 import {blueGrey} from "@mui/material/colors";
+import {VClusterChangeContext} from "./VClusterChangeContext";
+import {IsK8sEnabled} from "../helper/constants";
+import {sleep} from "../helper/util";
 
 const ddClient = createDockerDesktopClient();
 
-const refreshData = async (setCurrentK8sContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
-    try {
-        const result = await Promise.all([getCurrentK8sContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
-        setCurrentK8sContext(result[0]);
-        setVClusters(result[1]);
-        setNamespaces(result[2]);
-    } catch (err) {
-        console.log("error", JSON.stringify(err));
-        setCurrentK8sContext("");
-    }
+const isK8sEnabled = () => {
+    return localStorage.getItem(IsK8sEnabled) === "true";
 }
 
-const refreshContext = async (isDDK8sEnabled: boolean, setIsDDK8sEnabled: React.Dispatch<React.SetStateAction<any>>) => {
-    if (!isDDK8sEnabled) {
-        try {
-            let isDDK8sEnabled = await updateDockerDesktopK8sKubeConfig(ddClient);
-            console.log("isDDK8sEnabled[interval] : ", isDDK8sEnabled)
-            setIsDDK8sEnabled(isDDK8sEnabled)
-        } catch (err) {
-            console.log("isDDK8sEnabled[interval] error : ", JSON.stringify(err));
-            setIsDDK8sEnabled(false);
+const refreshData = async (setCurrentHostContext: React.Dispatch<React.SetStateAction<any>>, setVClusters: React.Dispatch<React.SetStateAction<any>>, setNamespaces: React.Dispatch<React.SetStateAction<any>>) => {
+    try {
+        if (isK8sEnabled()) {
+            const result = await Promise.all([getCurrentHostContext(ddClient), listVClusters(ddClient), listNamespaces(ddClient)]);
+            setCurrentHostContext(result[0]);
+            setVClusters(result[1]);
+            setNamespaces(result[2]);
         }
-    } else {
-        console.log("isDDK8sEnabled[interval] : ", isDDK8sEnabled)
+    } catch (err: any) {
+        if ("stdout" in err && err.stdout.includes("fatal") && err.stdout.includes("find vcluster")) {
+            localStorage.setItem(IsK8sEnabled, "false")
+        }
+        console.log("error : ", JSON.stringify(err));
     }
 }
 
-const checkIfDDK8sEnabled = async (setIsLoading: React.Dispatch<React.SetStateAction<any>>) => {
-    try {
-        setIsLoading(true);
-        let isDDK8sEnabled = await updateDockerDesktopK8sKubeConfig(ddClient);
-        setIsLoading(false);
-        return isDDK8sEnabled
-    } catch (err) {
-        console.log("checkIfDDK8sEnabled error : ", JSON.stringify(err));
-        setIsLoading(false);
-    }
-    return false;
+const refreshContext = async (setContexts: React.Dispatch<React.SetStateAction<any>>) => {
+    const result = await Promise.all([listHostContexts(ddClient), checkK8sConnection(ddClient)]);
+    setContexts(result[0]);
+    // check if the k8s is reachable
+    console.log("isK8sEnabled[interval] : ", result[1])
 }
 
 export const VCluster = () => {
     const [vClusters, setVClusters] = React.useState(undefined);
     const [namespaces, setNamespaces] = React.useState([]);
-    const [currentK8sContext, setCurrentK8sContext] = React.useState("");
-    const [isDDK8sEnabled, setIsDDK8sEnabled] = React.useState(false);
+    const [contexts, setContexts] = React.useState([]);
+    const [currentHostContext, setCurrentHostContext] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
 
     useEffect(() => {
         (async () => {
-            let isDDK8sEnabled = await checkIfDDK8sEnabled(setIsLoading);
-            console.log("isDDK8sEnabled : ", isDDK8sEnabled)
-            await setIsDDK8sEnabled(isDDK8sEnabled)
-            if (isDDK8sEnabled) {
-                await refreshData(setCurrentK8sContext, setVClusters, setNamespaces)
-            }
+            let contexts = await listHostContexts(ddClient);
+            // @ts-ignore
+            setContexts(contexts)
+            checkK8sConnection(ddClient);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
         })();
-        const contextInterval = setInterval(() => refreshContext(isDDK8sEnabled, setIsDDK8sEnabled), 5000);
+
+        const contextInterval = setInterval(() => refreshContext(setContexts), 5000);
         const dataInterval = setInterval(() => {
-            if (isDDK8sEnabled) {
-                return refreshData(setCurrentK8sContext, setVClusters, setNamespaces)
-            }
+            return refreshData(setCurrentHostContext, setVClusters, setNamespaces)
         }, 5000);
+
         return () => {
             clearInterval(dataInterval);
             clearInterval(contextInterval);
         }
-    }, [isDDK8sEnabled]);
+    }, []);
 
     const createUIVC = async (name: string, namespace: string, distro: string, chartVersion: string, values: string) => {
         try {
@@ -103,9 +94,27 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster create failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster create failed: " + JSON.stringify(err));
+        }
+    };
+
+    const changeUIContext = async (context: string) => {
+        try {
+            await setExtensionContext(ddClient, context);
+            ddClient.desktopUI.toast.success("extension context changed successfully");
+            setIsLoading(true);
+            // to avoid initial false from kubectl cluster-info command
+            await sleep(1000);
+            let isK8sEnabled = await checkK8sConnection(ddClient);
+            console.log("isK8sEnabled [switch context] : ", isK8sEnabled)
+            if (isK8sEnabled) {
+                await refreshData(setCurrentHostContext, setVClusters, setNamespaces)
+            }
+            setIsLoading(false)
+        } catch (err) {
+            ddClient.desktopUI.toast.error("extension context change failed: " + JSON.stringify(err));
         }
     };
 
@@ -119,7 +128,7 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster upgrade failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster upgrade failed: " + JSON.stringify(err));
         }
@@ -134,7 +143,7 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster[" + namespace + ":" + name + "] delete failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster delete failed: " + JSON.stringify(err));
         }
@@ -149,7 +158,7 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster pause failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster pause failed: " + JSON.stringify(err));
         }
@@ -164,43 +173,38 @@ export const VCluster = () => {
                 ddClient.desktopUI.toast.error("vcluster resume failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster resume failed : " + JSON.stringify(err));
         }
     };
 
-    const disconnectUIVC = async (namespace: string, context: string) => {
+    const disconnectUIVC = async (namespace: string) => {
         try {
-            const isDisconnected = await disconnectVCluster(ddClient, namespace, context);
+            const isDisconnected = await disconnectVCluster(ddClient, namespace);
             if (isDisconnected) {
                 ddClient.desktopUI.toast.success("vcluster disconnected successfully");
             } else {
                 ddClient.desktopUI.toast.error("vcluster disconnect failed");
             }
 
-            await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
         } catch (err) {
             ddClient.desktopUI.toast.error("vcluster disconnect failed: " + JSON.stringify(err));
         }
     };
 
     const connectUIVC = async (name: string, namespace: string) => {
-        const nodePortService = await isNodePortServiceAvailableForVcluster(ddClient, name, namespace)
-        if (!nodePortService) {
-            ddClient.desktopUI.toast.warning("Please use `vcluster connect` from terminal, as " + name + " doesn't have nodeport service enabled");
-        } else {
-            try {
-                const isConnected = await connectVCluster(ddClient, name, namespace);
-                if (isConnected) {
-                    ddClient.desktopUI.toast.success("vcluster connected successfully");
-                } else {
-                    ddClient.desktopUI.toast.error("vcluster connect failed");
-                }
-                await refreshData(setCurrentK8sContext, setVClusters, setNamespaces);
-            } catch (err) {
-                ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
+        try {
+            const isConnected = await connectVCluster(ddClient, name, namespace);
+            if (isConnected) {
+                ddClient.desktopUI.toast.success("vcluster connected successfully");
+            } else {
+                ddClient.desktopUI.toast.error("vcluster connect failed");
             }
+            await refreshData(setCurrentHostContext, setVClusters, setNamespaces);
+        } catch (err) {
+            ddClient.desktopUI.toast.error("vcluster connect failed: " + JSON.stringify(err));
         }
     }
 
@@ -218,11 +222,22 @@ export const VCluster = () => {
             />
         </Box>
     } else {
-        if (isDDK8sEnabled) {
+        if (isK8sEnabled()) {
             component = <React.Fragment>
-                <VClusterCreate
-                    createUIVC={createUIVC}
-                    namespaces={namespaces}/>
+                <Grid container spacing={2}>
+                    <Grid item xs={6} md={6} sx={{paddingLeft: 2}}>
+                        <VClusterCreate
+                            createUIVC={createUIVC}
+                            namespaces={namespaces}/>
+                    </Grid>
+                    <Grid item xs={6} md={6} sx={{padding: 2}} container justifyContent="flex-end">
+                        <VClusterChangeContext
+                            changeUIContext={changeUIContext}
+                            contexts={contexts}/>
+                        |
+                        <Typography variant="h6"> {getExtensionContext()} </Typography>
+                    </Grid>
+                </Grid>
                 <VClusterList
                     upgradeUIVC={upgradeUIVC}
                     deleteUIVC={deleteUIVC}
@@ -231,17 +246,30 @@ export const VCluster = () => {
                     disconnectUIVC={disconnectUIVC}
                     connectUIVC={connectUIVC}
                     vClusters={vClusters}
-                    currentK8sContext={currentK8sContext}
+                    currentHostContext={currentHostContext}
                 />
+
             </React.Fragment>
         } else {
             component = <Box>
+                <Grid container spacing={2}>
+                    <Grid item xs={6} md={6} sx={{padding: 2}} container justifyContent="flex">
+                        <VClusterChangeContext
+                            changeUIContext={changeUIContext}
+                            contexts={contexts}/>
+                        |
+                        <Typography variant="h6"> {getExtensionContext()} </Typography>
+                    </Grid>
+                </Grid>
                 <Alert iconMapping={{
                     error: <ErrorIcon fontSize="inherit"/>,
                 }} severity="error" color="error">
-                    Seems like Kubernetes is not enabled in your Docker Desktop. Please take a look at the <a
-                    href="https://docs.docker.com/desktop/kubernetes/">docker
-                    documentation</a> on how to enable the Kubernetes server.
+                    Seems like Kubernetes is not reachable from your Docker Desktop.
+                    Please take a look at the <a href="https://docs.docker.com/desktop/kubernetes/">docker
+                    documentation</a> on how to enable the Kubernetes server in docker-desktop and then select
+                    docker-desktop context.
+                    For other type of k8s clusters, check if kube-apiserver of your k8s cluster is reachable from your
+                    host machine.
                 </Alert>
             </Box>
         }

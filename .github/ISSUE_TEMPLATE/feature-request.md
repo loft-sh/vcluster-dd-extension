@@ -4,16 +4,13 @@ about: Suggest an idea for this project
 
 ---
 
-**Is your feature request related to a problem?**  
+**Is your feature request related to a problem?**
 
+**Which solution do you suggest?**
 
-**Which solution do you suggest?**  
+**Which alternative solutions exist?**
 
-
-**Which alternative solutions exist?**  
-
-
-**Additional context**  
+**Additional context**
 
 
 <!-- DO NOT EDIT BELOW THIS LINE -->

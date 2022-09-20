@@ -1,3 +1,15 @@
+import {getExtensionContext} from "./cli";
+
+export interface ContextDetails {
+    cluster: string,
+    user: string
+}
+
+export interface Context {
+    name: string,
+    context: ContextDetails
+}
+
 // Converts the seconds to hh:mm:ss format
 export const convertSeconds = (date: number) => {
     if (date) {
@@ -18,6 +30,28 @@ export const convertSeconds = (date: number) => {
 }
 
 // Converts into vCluster context format
-export const getVClusterContextName = (name: string, namespace: string, context: string) => {
-    return "vcluster_" + name + "_" + namespace + "_" + context
+export const getVClusterContextName = (vClusterName: string, vClusterNamespace: string, context?: string) => {
+    if (context) {
+        return "vcluster_" + vClusterName + "_" + vClusterNamespace + "_" + context
+    }
+    return "vcluster_" + vClusterName + "_" + vClusterNamespace + "_" + getExtensionContext()
+}
+
+
+// check if the context is of vcluster
+export const isVclusterContext = (originalContext: string, contexts: Context[]) => {
+    const splitted = originalContext.split("_")
+    if (splitted.length < 4) {
+        return false
+    }
+
+    let context = splitted.slice(3).join("-");
+    if (contexts.filter(e => e.name === context).length > 0) {
+        return originalContext.startsWith("vcluster_")
+    }
+    return false
+}
+
+export const sleep = (ms: number) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
